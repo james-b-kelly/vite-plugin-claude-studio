@@ -1,0 +1,126 @@
+/* Markdown rendered in the Studio log. Dark dev-tool styling — NOT
+ * the app design system (the panel is intentionally separate chrome). */
+
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 8px;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 12px 0 6px;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.md h1 {
+  font-size: 16px;
+}
+.md h2 {
+  font-size: 14px;
+}
+.md h3 {
+  font-size: 13px;
+}
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 12px;
+}
+
+.md ul,
+.md ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.md li {
+  margin: 2px 0;
+}
+.md li > ul,
+.md li > ol {
+  margin: 2px 0;
+}
+
+.md a {
+  color: #8ab4f8;
+  text-decoration: underline;
+}
+
+.md strong {
+  color: #fff;
+  font-weight: 700;
+}
+.md em {
+  font-style: italic;
+}
+.md del {
+  opacity: 0.7;
+}
+
+.md code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #111114;
+  color: #8ab4f8;
+  font-size: 11px;
+}
+.md pre {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  overflow: auto;
+  background: #111114;
+  border: 1px solid #2a2a2e;
+  border-radius: 6px;
+}
+.md pre code {
+  display: block;
+  padding: 0;
+  background: none;
+  color: #c8c8c8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.md blockquote {
+  margin: 0 0 8px;
+  padding: 2px 10px;
+  border-left: 3px solid #3b6fe0;
+  color: #b8c4d4;
+}
+
+.md hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid #333;
+}
+
+.md table {
+  margin: 0 0 8px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.md th,
+.md td {
+  padding: 3px 8px;
+  border: 1px solid #333;
+  text-align: left;
+}
+.md th {
+  background: #26262b;
+  color: #fff;
+}
+
+/* GFM task-list checkboxes */
+.md input[type="checkbox"] {
+  margin-right: 6px;
+}

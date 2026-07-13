@@ -1,0 +1,62 @@
+{
+  "name": "vite-plugin-claude-studio",
+  "version": "0.1.0",
+  "description": "Dev-only in-app Studio for Vite + React: chat with your local Claude Code from inside the running app, then review, check, revert, or commit the change.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/james-b-kelly/vite-plugin-claude-studio.git"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/vite.js",
+  "types": "./dist/types/vite/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/vite/index.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./vite": {
+      "types": "./dist/types/vite/index.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./panel": {
+      "types": "./dist/types/panel/index.d.ts",
+      "import": "./dist/panel.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && vite build -c vite.config.node.ts && vite build -c vite.config.panel.ts && tsc -p tsconfig.build.json",
+    "prepare": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "vite": ">=5"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^4.1.9"
+  }
+}

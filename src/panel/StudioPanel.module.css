@@ -1,0 +1,478 @@
+/* In-App Studio dev panel — intentionally NOT using the app design system.
+ * Neutral dark dev-tool chrome so it reads as tooling, not product UI. */
+
+.fab {
+  /* Floating launch button (fixed-position dev-tool chrome in its own DOM root). */
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 99999;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #1c1c1f;
+  color: #fff;
+  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.fabTop {
+  top: 14px;
+  bottom: auto;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  max-width: 90vw;
+  height: 100vh;
+  overflow: hidden; /* clip children so the log is the only scroll region */
+  background: #1c1c1f;
+  color: #e6e6e6;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Resizable width: the inline style on .panel overrides the 380px
+ * default above; max-width:90vw still caps it. Drag handle on the left edge. */
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  touch-action: none; /* let pointer drag own the gesture */
+}
+.resizeHandle:hover,
+.resizeHandle:active {
+  background: var(--studio-accent, #3b6fe0);
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #333;
+}
+
+.title {
+  font-weight: 700;
+}
+
+.modeToggle {
+  display: flex;
+  border: 1px solid #3a3a3f;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.modeBtn {
+  padding: 4px 9px;
+  border: none;
+  background: transparent;
+  color: #9a9a9a;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+.modeBtn:disabled {
+  cursor: default;
+}
+.modeActive {
+  background: #3b6fe0;
+  color: #fff;
+}
+.designerHint {
+  margin-top: 6px;
+  color: #ffb454;
+}
+
+.meta {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-bottom: 1px solid #2a2a2e;
+  color: #9a9a9a;
+}
+
+.warn {
+  color: #ffb454;
+}
+
+/* Sticky sync banner — conflict / dirty / offline notice. */
+.syncBanner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #3a341e;
+  background: #2a2416;
+  color: #ffce85;
+  line-height: 1.45;
+}
+.syncBannerX {
+  flex: 0 0 auto;
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #b89a6a;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+.syncBannerX:hover {
+  color: #fff;
+}
+
+.log {
+  flex: 1;
+  min-height: 0; /* allow the flex item to shrink so overflow:auto actually scrolls */
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.entry {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 4px;
+}
+
+.user {
+  color: #fff;
+  font-weight: 600;
+  margin-top: 12px;
+  padding: 6px 8px;
+  background: #26262b;
+  border-left: 2px solid #3b6fe0;
+  border-radius: 4px;
+}
+.user:first-child {
+  margin-top: 0;
+}
+.tool {
+  color: #e6e6e6;
+}
+.text {
+  color: #9aa0a6;
+}
+.done {
+  color: #6fbf73;
+}
+.error {
+  color: #ff6b5e;
+}
+
+.review {
+  flex: 0 0 auto;
+  border-top: 1px solid #2a2a2e;
+  padding: 8px 12px;
+  max-height: 45vh;
+  overflow: auto;
+}
+.reviewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.reviewHead h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: #9a9a9a;
+  font-weight: 600;
+}
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.filePath {
+  color: #8ab4f8;
+  word-break: break-all;
+}
+.badge {
+  flex: 0 0 auto;
+  width: 30px;
+  text-align: center;
+  padding: 1px 0;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge_new {
+  background: #1e3a24;
+  color: #6fbf73;
+}
+.badge_modified {
+  background: #3a341e;
+  color: #ffb454;
+}
+.badge_deleted {
+  background: #3a1e1e;
+  color: #ff8a7e;
+}
+
+/* Diff modal — opened from "view diff"; covers the viewport above the panel. */
+.diffBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 4vw;
+  background: rgba(0, 0, 0, 0.55);
+}
+.diffModal {
+  display: flex;
+  flex-direction: column;
+  width: 1000px;
+  max-width: 100%;
+  max-height: 92vh;
+  overflow: hidden;
+  background: #1c1c1f;
+  border: 1px solid #333;
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.diffModalHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+}
+.diffBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 0;
+  background: #111114;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.diffLine {
+  display: block;
+  padding: 0 14px;
+  white-space: pre;
+  color: #c8c8c8;
+}
+.dlCtx {
+  color: #c8c8c8;
+}
+.dlAdd {
+  color: #b9f0bf;
+  background: rgba(46, 160, 67, 0.18);
+}
+.dlDel {
+  color: #ffc4bd;
+  background: rgba(248, 81, 73, 0.18);
+}
+.dlHunk {
+  color: #8ab4f8;
+  background: #1a1f2b;
+}
+.dlMeta {
+  color: #9a9a9a;
+  font-weight: 600;
+}
+
+.check {
+  margin: 8px 0 0;
+  padding: 8px;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.checkOk {
+  background: #14241a;
+  border: 1px solid #1e3a24;
+  color: #6fbf73;
+}
+.checkFail {
+  background: #241616;
+  border: 1px solid #3a1e1e;
+  color: #ff8a7e;
+}
+
+.reviewActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Commit result lives outside the (padded) review block, so add its own gutter. */
+.commitBanner {
+  margin: 8px 12px 0;
+}
+
+.composer {
+  flex: 0 0 auto;
+  border-top: 1px solid #333;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 56px;
+  resize: vertical;
+  background: #111114;
+  color: #e6e6e6;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid #3a3a3f;
+  border-radius: 6px;
+  background: #2a2a2e;
+  color: #e6e6e6;
+  font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.primary {
+  background: var(--studio-accent, #3b6fe0);
+  border-color: var(--studio-accent, #3b6fe0);
+  color: #fff;
+}
+.danger {
+  background: transparent;
+  border-color: #5a3a3a;
+  color: #ff8a7e;
+}
+.spacer {
+  flex: 1;
+}
+.link {
+  background: none;
+  border: none;
+  color: #8ab4f8;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* ── Select & annotate ──────────────────────────────────────────────────────── */
+
+/* The "Select" toggle row sits directly above the prompt textarea. */
+.selectRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.selectToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #3a3a3f;
+  border-radius: 6px;
+  background: #2a2a2e;
+  color: #cfcfcf;
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+.selectToggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.selectActive {
+  background: #3b6fe0;
+  border-color: #3b6fe0;
+  color: #fff;
+}
+
+/* The pinned-element chip: ⌖ <button> · EventModal.tsx:42 × */
+.pinChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid #3b6fe0;
+  border-radius: 6px;
+  background: #1b2740;
+  color: #cfe0ff;
+  font: 600 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.pinChipText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinChipX {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: #9ab4e8;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+.pinChipX:hover {
+  color: #fff;
+}
+
+/* Hover highlight drawn over the element under the pointer while selecting. */
+.pickHighlight {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  border: 2px solid #3b6fe0;
+  background: rgba(59, 111, 224, 0.12);
+  border-radius: 2px;
+}
+.pickLabel {
+  position: absolute;
+  left: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #3b6fe0;
+  color: #fff;
+  font: 600 10px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* Persistent outline of the currently pinned element. */
+.pinOutline {
+  position: fixed;
+  z-index: 2147482000;
+  pointer-events: none;
+  border: 2px dashed #3b6fe0;
+  border-radius: 2px;
+}
