@@ -23,7 +23,10 @@ You need the `claude` CLI installed and logged in — the Studio shells out to
 whatever `claude` resolves to on your `PATH`. If you can already run `claude`
 from a terminal in your project directory, you're set. There's no separate
 API key to configure: every run through the panel uses your own Claude
-usage, exactly as if you'd typed the prompt into the CLI yourself.
+usage, exactly as if you'd typed the prompt into the CLI yourself. Any
+`ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` in your environment is
+deliberately removed from the CLI subprocess, so an ambient key can't
+silently divert Studio to billed API usage — it always runs on your login.
 
 ## Install
 

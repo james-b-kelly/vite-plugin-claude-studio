@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt, parseGenerateBody } from "./claude";
+import { buildPrompt, parseGenerateBody, subscriptionEnv } from "./claude";
+
+describe("subscriptionEnv", () => {
+  it("strips ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN so the CLI uses the logged-in subscription", () => {
+    const env = subscriptionEnv({
+      PATH: "/usr/bin",
+      HOME: "/home/dev",
+      ANTHROPIC_API_KEY: "sk-ant-should-not-leak",
+      ANTHROPIC_AUTH_TOKEN: "token-should-not-leak",
+    });
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    // Everything else must survive — PATH so `claude` is found, HOME so the CLI reads its stored login.
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/dev");
+  });
+
+  it("does not mutate the caller's env object (must never delete from process.env)", () => {
+    const base = { ANTHROPIC_API_KEY: "sk-ant-keep-in-caller" };
+    subscriptionEnv(base);
+    expect(base.ANTHROPIC_API_KEY).toBe("sk-ant-keep-in-caller");
+  });
+});
 
 describe("parseGenerateBody", () => {
   it("requires an instruction", () => {
