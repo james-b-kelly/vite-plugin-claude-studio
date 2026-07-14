@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-claude-studio",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Dev-only in-app Studio for Vite + React: chat with your local Claude Code from inside the running app, then review, check, revert, or commit the change.",
   "type": "module",
   "license": "UNLICENSED",
