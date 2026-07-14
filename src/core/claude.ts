@@ -67,6 +67,27 @@ function pinContext(pin: PinInfo): string {
   );
 }
 
+/**
+ * Environment for the spawned Claude Code CLI.
+ *
+ * Studio is documented to drive the *local* Claude Code CLI on the user's own
+ * subscription — no separate API key. But `claude` treats an `ANTHROPIC_API_KEY`
+ * (or `ANTHROPIC_AUTH_TOKEN`) in its environment as an instruction to use billed
+ * API access instead of the logged-in account. Those vars are commonly exported
+ * from a shell profile for other SDK work, and the dev server (and therefore this
+ * child) inherits them — silently redirecting Studio to pay-per-token API usage
+ * (and failing with "Credit balance is too low" when that account has no credits).
+ *
+ * Strip them from the child's env so the CLI always falls back to the subscription
+ * login. A shallow copy is returned; `process.env` is never mutated.
+ */
+export function subscriptionEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...base };
+  delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN;
+  return env;
+}
+
 function claudeErrorMessage(err: unknown): string {
   if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
     return "Claude Code CLI not found — install it and ensure `claude` is on your PATH, then log in.";
@@ -180,7 +201,13 @@ export function startGeneration(args: {
   ];
   if (request.resumeSessionId) cliArgs.push("--resume", request.resumeSessionId);
 
-  const child = spawn("claude", cliArgs, { cwd: root, stdio: ["pipe", "pipe", "pipe"] });
+  // env: subscriptionEnv() so an ambient ANTHROPIC_API_KEY can't redirect the CLI
+  // to billed API usage — Studio always runs on the logged-in subscription.
+  const child = spawn("claude", cliArgs, {
+    cwd: root,
+    env: subscriptionEnv(),
+    stdio: ["pipe", "pipe", "pipe"],
+  });
   activeRun = child;
 
   let sessionId: string | undefined;
