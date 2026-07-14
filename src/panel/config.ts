@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 export type PanelConfig = {
   buttonLabel: string;
   accent: string;
-  position: "bottom-right" | "top-right";
+  position: "bottom-right" | "top-right" | "bottom-left" | "top-left";
   appRootSelector: string;
   checkLabels: string[];
 };

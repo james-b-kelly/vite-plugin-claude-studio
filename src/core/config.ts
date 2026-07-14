@@ -1,7 +1,7 @@
 /** A named quality-gate command, e.g. { label: "lint", command: ["npm", "run", "lint"] }. */
 export type CheckSpec = { label: string; command: string[] };
 
-export type PanelPosition = "bottom-right" | "top-right";
+export type PanelPosition = "bottom-right" | "top-right" | "bottom-left" | "top-left";
 
 export interface PanelOptions {
   /** Text on the floating launch button. */
