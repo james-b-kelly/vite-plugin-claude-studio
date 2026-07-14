@@ -85,14 +85,34 @@ describe("StudioPanel FAB position classes", () => {
     await waitFor(() => expect(fab.className).toContain("fabTop"));
   });
 
-  it("does not add fabLeft for right-dock positions", async () => {
-    vi.stubGlobal("fetch", mockFetchWithConfig({ position: "bottom-right" }));
+  it("does not add fabLeft for bottom-right", async () => {
+    // Custom buttonLabel proves the served config was adopted before the
+    // negative assertions run — otherwise they'd pass vacuously against the
+    // defaults, before the /__studio/config fetch resolved.
+    vi.stubGlobal(
+      "fetch",
+      mockFetchWithConfig({ position: "bottom-right", buttonLabel: "✦ Cfg" }),
+    );
 
     render(<StudioPanel />);
     const fab = screen.getByLabelText("Open In-App Studio");
 
-    // Wait for config to load (buttonLabel default stays, but position is consumed)
-    await waitFor(() => expect(fab).toBeInTheDocument());
+    await waitFor(() => expect(fab).toHaveTextContent("✦ Cfg"));
+    expect(fab.className).not.toContain("fabLeft");
+    expect(fab.className).not.toContain("fabTop");
+  });
+
+  it("adds fabTop but not fabLeft for top-right", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchWithConfig({ position: "top-right", buttonLabel: "✦ Cfg" }),
+    );
+
+    render(<StudioPanel />);
+    const fab = screen.getByLabelText("Open In-App Studio");
+
+    await waitFor(() => expect(fab).toHaveTextContent("✦ Cfg"));
+    expect(fab.className).toContain("fabTop");
     expect(fab.className).not.toContain("fabLeft");
   });
 });
