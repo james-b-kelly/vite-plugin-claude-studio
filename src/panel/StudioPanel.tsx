@@ -92,6 +92,7 @@ function DiffBody({ text }: { text: string }) {
 export function StudioPanel() {
   const cfg = usePanelConfig();
   const accentStyle = { "--studio-accent": cfg.accent } as CSSProperties;
+  const dockLeft = cfg.position.endsWith("left");
   const [open, setOpen] = useState(loadOpen);
   const [width, setWidth] = useState(loadWidth);
   const draggingRef = useRef(false);
@@ -156,13 +157,14 @@ export function StudioPanel() {
     if (root) root.style.transition = "none";
     document.body.style.userSelect = "none";
     document.body.style.cursor = "ew-resize";
-    const onMove = (ev: PointerEvent) => setWidth(clampWidth(window.innerWidth - ev.clientX));
+    const onMove = (ev: PointerEvent) =>
+      setWidth(dockLeft ? clampWidth(ev.clientX) : clampWidth(window.innerWidth - ev.clientX));
     const teardown = () => {
       draggingRef.current = false;
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       const r = document.querySelector<HTMLElement>(cfg.appRootSelector);
-      if (r) r.style.transition = "margin-right 0.15s ease";
+      if (r) r.style.transition = `${dockLeft ? "margin-left" : "margin-right"} 0.15s ease`;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", teardown);
       resizeCleanupRef.current = null;
@@ -253,18 +255,20 @@ export function StudioPanel() {
     return () => window.removeEventListener("keydown", onKey);
   }, [pin, selecting, showDiff]);
 
-  // Dock the panel beside the app: push #root left by the panel width so content
-  // shrinks instead of being covered. Tracks live resizes (width dep); the drag
-  // handler suspends the transition so resizing doesn't lag. Reset when closed.
+  // Dock the panel beside the app: push #root left or right by the panel width
+  // so content shrinks instead of being covered. Tracks live resizes (width dep);
+  // the drag handler suspends the transition so resizing doesn't lag. Reset when closed.
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(cfg.appRootSelector);
     if (!root) return;
-    if (!draggingRef.current) root.style.transition = "margin-right 0.15s ease";
-    root.style.marginRight = open ? `${width}px` : "";
+    const marginProp = dockLeft ? "marginLeft" : "marginRight";
+    const transitionProp = dockLeft ? "margin-left" : "margin-right";
+    if (!draggingRef.current) root.style.transition = `${transitionProp} 0.15s ease`;
+    root.style[marginProp] = open ? `${width}px` : "";
     return () => {
-      root.style.marginRight = "";
+      root.style[marginProp] = "";
     };
-  }, [open, width, cfg.appRootSelector]);
+  }, [open, width, cfg.appRootSelector, dockLeft]);
 
   // Keep the width within bounds when the viewport shrinks (e.g. window resize).
   useEffect(() => {
@@ -276,7 +280,7 @@ export function StudioPanel() {
   if (!open) {
     return (
       <button
-        className={`${classes.fab} ${cfg.position === "top-right" ? classes.fabTop : ""}`}
+        className={`${classes.fab} ${cfg.position.startsWith("top") ? classes.fabTop : ""} ${dockLeft ? classes.fabLeft : ""}`}
         style={accentStyle}
         onClick={() => setOpen(true)}
         aria-label="Open In-App Studio"
@@ -302,9 +306,9 @@ export function StudioPanel() {
   };
 
   return (
-    <div className={classes.panel} style={{ width, ...accentStyle }}>
+    <div className={`${classes.panel} ${dockLeft ? classes.panelLeft : ""}`} style={{ width, ...accentStyle }}>
       <div
-        className={classes.resizeHandle}
+        className={`${classes.resizeHandle} ${dockLeft ? classes.resizeHandleRight : ""}`}
         onPointerDown={startResize}
         role="separator"
         aria-orientation="vertical"

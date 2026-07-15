@@ -24,6 +24,13 @@ describe("resolveOptions", () => {
     expect(r.panel.appRootSelector).toBe("#root");
   });
 
+  it("round-trips bottom-left through resolveOptions", () => {
+    const r = resolveOptions({ panel: { position: "bottom-left" } });
+    expect(r.panel.position).toBe("bottom-left");
+    expect(r.panel.buttonLabel).toBe(DEFAULT_PANEL.buttonLabel);
+    expect(r.panel.accent).toBe(DEFAULT_PANEL.accent);
+  });
+
   it("keeps user checks and trims the system prompt", () => {
     const checks = [{ label: "typecheck", command: ["npx", "tsc", "--noEmit"] }];
     const r = resolveOptions({ checks, systemPrompt: "  house rules  " });

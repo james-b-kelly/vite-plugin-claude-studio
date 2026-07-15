@@ -22,10 +22,16 @@
   bottom: auto;
 }
 
+.fabLeft {
+  left: 16px;
+  right: auto;
+}
+
 .panel {
   position: fixed;
   top: 0;
   right: 0;
+  left: auto;
   z-index: 99999;
   display: flex;
   flex-direction: column;
@@ -39,12 +45,19 @@
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.35);
 }
 
+.panelLeft {
+  left: 0;
+  right: auto;
+}
+
 /* Resizable width: the inline style on .panel overrides the 380px
- * default above; max-width:90vw still caps it. Drag handle on the left edge. */
+ * default above; max-width:90vw still caps it. Drag handle on the left edge
+ * (right edge when docked left, via .resizeHandleRight). */
 .resizeHandle {
   position: absolute;
   top: 0;
   left: 0;
+  right: auto;
   z-index: 1;
   width: 6px;
   height: 100%;
@@ -54,6 +67,11 @@
 .resizeHandle:hover,
 .resizeHandle:active {
   background: var(--studio-accent, #3b6fe0);
+}
+
+.resizeHandleRight {
+  left: auto;
+  right: 0;
 }
 
 .header {

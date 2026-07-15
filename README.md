@@ -97,7 +97,7 @@ box.
 | `systemPrompt` | `string` | `""` | Extra project context appended to every prompt — house rules, conventions, anything Claude should know about this codebase that isn't obvious from the files. |
 | `panel.buttonLabel` | `string` | `"◳ Studio"` | Text on the floating launch button. |
 | `panel.accent` | `string` (any CSS color) | `"#3b6fe0"` | Accent color for primary actions in the panel UI. |
-| `panel.position` | `"bottom-right" \| "top-right"` | `"bottom-right"` | Corner the floating launch button docks to. |
+| `panel.position` | `"bottom-right" \| "top-right" \| "bottom-left" \| "top-left"` | `"bottom-right"` | Corner the floating launch button and panel dock to. |
 | `panel.appRootSelector` | `string` | `"#root"` | Selector for your app's root element. The panel docks by shrinking this element rather than overlaying it. |
 
 A detached `HEAD`, or any failure to determine the current git branch, is
@@ -117,7 +117,7 @@ claudeStudio({
   panel: {
     buttonLabel: "◳ Studio",
     accent: "#3b6fe0",
-    position: "bottom-right",
+    position: "bottom-right", // or "top-right", "bottom-left", "top-left"
     appRootSelector: "#root",
   },
 })
