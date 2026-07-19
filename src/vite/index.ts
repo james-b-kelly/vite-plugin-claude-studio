@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
 import {
   isProtectedBranch,
@@ -19,12 +20,15 @@ import {
   aheadBehind,
   currentBranch,
   doRevert,
+  fetchOrigin,
   fullDiff,
   gitErr,
   isDirty,
   listChanges,
   refExists,
+  syncDesignerBranch,
 } from "../core/git";
+import { designerCliArgs } from "../core/designer";
 import { runChecks } from "../core/checks";
 import {
   isGenerationRunning,
@@ -35,6 +39,7 @@ import {
 } from "../core/claude";
 
 export type { CheckSpec, PanelOptions, PanelPosition, StudioOptions } from "../core/config";
+export type { DesignerOptions } from "../core/designer";
 
 /**
  * In-App Studio — DEV-ONLY Vite middleware.
@@ -43,12 +48,24 @@ export type { CheckSpec, PanelOptions, PanelPosition, StudioOptions } from "../c
  * inside the running app can edit the real application. The `configureServer`
  * hook is serve-only, so the spawn endpoint never exists in a production build.
  *
- * Developer-only: full tool access, ungated.
+ * Developer mode (default): full tool access, ungated. With the `designer`
+ * option configured, the panel additionally offers the gated Designer profile:
+ * branch-pinned, front-end-only writes (dist/gate.js PreToolUse hook), filtered
+ * MCP, stub-tag convention. See src/core/designer.ts.
  */
 
-// One review check at a time; one commit-and-push at a time (per dev server).
+// One review check at a time; one commit-and-push at a time; one branch sync at
+// a time (per dev server).
 let checkRunning = false;
 let committing = false;
+let syncing = false;
+
+// The built gate hook ships alongside this module in dist/ — resolve it
+// relative to this file so it works wherever the package is installed. Lazy:
+// import.meta.url is not a file: URL in some test environments (jsdom).
+function gatePath(): string {
+  return fileURLToPath(new URL("./gate.js", import.meta.url));
+}
 
 export default function claudeStudio(options: StudioOptions = {}): Plugin {
   const resolved = resolveOptions(options);
@@ -149,6 +166,12 @@ async function route(
     return handleGenerate(req, res, root, resolved);
   }
 
+  // Branch sync: pins Designer mode to its dedicated branch; Developer mode
+  // just gets a fetch + freshness report, never a branch switch.
+  if (pathname === "/__studio/sync" && method === "POST") {
+    return handleSync(req, res, root, resolved);
+  }
+
   if (pathname === "/__studio/stop" && method === "POST") {
     return sendJson(res, 200, { stopped: stopGeneration() });
   }
@@ -198,6 +221,12 @@ async function handleGenerate(
 ): Promise<void> {
   const request = parseGenerateBody(await readBody(req));
 
+  // Designer mode must fail closed: without the configured profile there is no
+  // gate, no MCP filter and no pinned branch, so refuse rather than run ungated.
+  if (request.mode === "designer" && !resolved.designer) {
+    throw new HttpError(400, "Designer mode is not configured for this project.");
+  }
+
   const branch = currentBranch(root);
   if (branch === null) {
     throw new HttpError(400, "Could not determine the git branch — refusing for safety.");
@@ -223,6 +252,13 @@ async function handleGenerate(
     branch,
     request,
     systemPrompt: resolved.systemPrompt,
+    designer:
+      request.mode === "designer" && resolved.designer
+        ? {
+            cliArgs: designerCliArgs({ root, designer: resolved.designer, gatePath: gatePath() }),
+            preamble: resolved.designer.preamble,
+          }
+        : undefined,
     sink: {
       writeRaw: (line) => {
         if (!res.writableEnded) res.write(line + "\n");
@@ -232,6 +268,72 @@ async function handleGenerate(
         if (!res.writableEnded) res.end();
       },
     },
+  });
+}
+
+/**
+ * Branch sync. Designer mode is pinned to its dedicated branch (created from
+ * `origin/<base>` the first time, then kept fast-forwarded and merged with the
+ * base). Developer mode is left on whatever branch the developer chose — only
+ * fetch + report freshness, never yank them off their work. Fetch is
+ * best-effort: offline must never block local editing.
+ */
+async function handleSync(
+  req: IncomingMessage,
+  res: ServerResponse,
+  root: string,
+  resolved: ResolvedStudioOptions,
+): Promise<void> {
+  let body: any;
+  try {
+    body = JSON.parse((await readBody(req)) || "{}");
+  } catch {
+    throw new HttpError(400, "Invalid JSON body");
+  }
+  const designer = body.mode === "designer" ? resolved.designer : null;
+
+  if (isGenerationRunning()) throw new HttpError(409, "A generation is running — sync after it finishes.");
+  if (committing) throw new HttpError(409, "A commit is in progress — sync after it finishes.");
+  if (syncing) throw new HttpError(409, "A sync is already in progress.");
+
+  syncing = true;
+  try {
+    const online = fetchOrigin(root);
+    if (!designer) {
+      return syncResponse(res, root, resolved, false, online ? "ok" : "offline");
+    }
+    try {
+      const { created, result } = syncDesignerBranch(root, {
+        branch: designer.branch,
+        baseBranch: designer.baseBranch,
+        online,
+      });
+      return syncResponse(res, root, resolved, created, result);
+    } catch (e) {
+      throw new HttpError(400, e instanceof Error ? e.message : "Sync failed");
+    }
+  } finally {
+    syncing = false;
+  }
+}
+
+function syncResponse(
+  res: ServerResponse,
+  root: string,
+  resolved: ResolvedStudioOptions,
+  created: boolean,
+  result: string,
+): void {
+  const branch = currentBranch(root);
+  const ab = aheadBehind(root, branch);
+  sendJson(res, 200, {
+    branch,
+    protectedBranch: isProtectedBranch(branch, resolved.protectedBranches),
+    created,
+    dirty: isDirty(root),
+    result,
+    behind: ab?.behind ?? null,
+    ahead: ab?.ahead ?? null,
   });
 }
 
@@ -268,6 +370,16 @@ async function handleCommit(
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (!message) throw new HttpError(400, "A commit message is required.");
   if (message.length > 500) throw new HttpError(400, "Commit message too long.");
+
+  // Designer mode is pinned to its branch: refuse to commit anywhere else, so
+  // design work can't land on a branch nobody is gating.
+  if (body.mode === "designer" && resolved.designer && branch !== resolved.designer.branch) {
+    throw new HttpError(
+      400,
+      `Designer-mode commits go to "${resolved.designer.branch}", but you're on "${branch}". ` +
+        "Reopen the panel in Designer mode to switch first.",
+    );
+  }
 
   committing = true;
   try {

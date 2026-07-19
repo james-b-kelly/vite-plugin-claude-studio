@@ -52,6 +52,18 @@ function loadOpen(): boolean {
   }
 }
 
+type Mode = "developer" | "designer";
+
+// Sticky banner copy for sync outcomes that need the designer's awareness.
+// "synced"/"ok" are silent. The designer is never asked to resolve git — just told.
+const SYNC_BANNERS: Record<string, string> = {
+  conflict:
+    "The base branch has changes that conflict with this branch — couldn't auto-merge. You can keep working; let a developer know so they can reconcile.",
+  "dirty-skip":
+    "You have uncommitted changes, so I couldn't sync the design branch. Commit or revert them first — or let a developer know.",
+  offline: "Couldn't reach the remote — working from your local copy. Changes may need reconciling later.",
+};
+
 // Render a unified `git diff` with line coloring: additions green, deletions
 // red, hunk headers blue, file/meta headers muted. Order matters — the +++/---
 // file markers must be classified as meta BEFORE the +/- add/remove check.
@@ -99,6 +111,8 @@ export function StudioPanel() {
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const [input, setInput] = useState("");
   const [info, setInfo] = useState<StatusInfo | null>(null);
+  const [mode, setMode] = useState<Mode>("developer");
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   // Visual select & annotate. `pin` is the serialisable target sent to Claude;
   // `pinnedEl` is the live node the outline tracks.
@@ -174,14 +188,20 @@ export function StudioPanel() {
     window.addEventListener("pointerup", teardown);
   };
 
-  // On open, detect the current branch + dirty state (read-only /__studio/status).
+  // On open, detect the current branch + dirty state (read-only /__studio/status)
+  // and reflect the branch in the mode toggle — WITHOUT switching branches.
+  // Opening must never move the working tree; the branch only changes when the
+  // user explicitly clicks a mode button (see selectMode).
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    setSyncResult(null);
     fetch("/__studio/status")
       .then((r) => r.json())
       .then((d: StatusInfo) => {
-        if (!cancelled) setInfo(d);
+        if (cancelled) return;
+        setInfo(d);
+        if (cfg.designer) setMode(d.branch === cfg.designer.branch ? "designer" : "developer");
       })
       .catch(() => {
         if (!cancelled) setInfo(null);
@@ -189,7 +209,26 @@ export function StudioPanel() {
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, cfg.designer]);
+
+  // Explicit mode switch from the toggle — the ONLY path that changes the branch.
+  // Designer pins the tree to the design branch; Developer leaves it where it is.
+  // The server does the checkout; we reflect the result + any sync banner.
+  const selectMode = (next: Mode) => {
+    setMode(next);
+    setSyncResult(null);
+    fetch("/__studio/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: next }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setInfo(d);
+        setSyncResult(d.result ?? null);
+      })
+      .catch(() => setInfo(null));
+  };
 
   // After a run settles, refresh branch/dirty (the run may have changed the tree).
   useEffect(() => {
@@ -301,7 +340,7 @@ export function StudioPanel() {
     const route = window.location.pathname + window.location.search + window.location.hash;
     const screen = captureScreenContext();
     // Pin is sticky: it rides along on follow-up messages until cleared/replaced.
-    run({ instruction, route, screen, resumeSessionId: sessionId, pin: pin ?? undefined });
+    run({ instruction, route, screen, mode, resumeSessionId: sessionId, pin: pin ?? undefined });
     setInput("");
   };
 
@@ -317,6 +356,26 @@ export function StudioPanel() {
       />
       <div className={classes.header}>
         <span className={classes.title}>◳ In-App Studio</span>
+        {cfg.designer && (
+          <div className={classes.modeToggle}>
+            <button
+              className={`${classes.modeBtn} ${mode === "developer" ? classes.modeActive : ""}`}
+              onClick={() => selectMode("developer")}
+              disabled={running}
+              title="Full access: front-end + backend/logic"
+            >
+              Developer
+            </button>
+            <button
+              className={`${classes.modeBtn} ${mode === "designer" ? classes.modeActive : ""}`}
+              onClick={() => selectMode("designer")}
+              disabled={running}
+              title="Front-end only — backend/data writes are blocked"
+            >
+              Designer
+            </button>
+          </div>
+        )}
         <span className={classes.spacer} />
         <button className={classes.link} onClick={() => setOpen(false)}>
           close
@@ -337,7 +396,22 @@ export function StudioPanel() {
         ) : (
           "…"
         )}
+        {cfg.designer && mode === "designer" && (
+          <div className={classes.designerHint}>
+            Designer mode — front-end only. Data that doesn't exist yet is mocked and flagged{" "}
+            <code>{cfg.designer.stubTag}</code> for a developer to wire up.
+          </div>
+        )}
       </div>
+
+      {syncResult && SYNC_BANNERS[syncResult] && (
+        <div className={classes.syncBanner}>
+          <span>⚠ {SYNC_BANNERS[syncResult]}</span>
+          <button className={classes.syncBannerX} onClick={() => setSyncResult(null)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className={classes.log} ref={logRef} onScroll={onLogScroll}>
         {log.length === 0 && !running && (
@@ -419,7 +493,7 @@ export function StudioPanel() {
                     `Runs ${cfg.checkLabels.join(" + ")} first — won't commit if it fails.\n\nCommit message:`,
                   def,
                 );
-                if (msg && msg.trim()) commit(msg.trim());
+                if (msg && msg.trim()) commit(msg.trim(), mode);
               }}
             >
               {busy === "committing" ? "committing…" : "Commit & push"}
