@@ -7,6 +7,8 @@ export type PanelConfig = {
   position: "bottom-right" | "top-right" | "bottom-left" | "top-left";
   appRootSelector: string;
   checkLabels: string[];
+  /** Present iff the plugin has Designer mode configured — enables the mode toggle. */
+  designer: { branch: string; stubTag: string } | null;
 };
 
 export const DEFAULT_PANEL_CONFIG: PanelConfig = {
@@ -15,6 +17,7 @@ export const DEFAULT_PANEL_CONFIG: PanelConfig = {
   position: "bottom-right",
   appRootSelector: "#root",
   checkLabels: ["lint", "build"],
+  designer: null,
 };
 
 /** Fetch the served config once per mount; fall back to defaults on any failure. */
@@ -27,6 +30,10 @@ export function usePanelConfig(): PanelConfig {
       .then((d) => {
         if (cancelled || !d || typeof d !== "object") return;
         const panel = (d.panel ?? {}) as Partial<PanelConfig>;
+        const designer =
+          d.designer && typeof d.designer.branch === "string"
+            ? { branch: d.designer.branch, stubTag: String(d.designer.stubTag ?? "@design-stub") }
+            : null;
         setConfig({
           ...DEFAULT_PANEL_CONFIG,
           ...panel,
@@ -34,6 +41,7 @@ export function usePanelConfig(): PanelConfig {
             Array.isArray(d.checkLabels) && d.checkLabels.length > 0
               ? d.checkLabels.map(String)
               : DEFAULT_PANEL_CONFIG.checkLabels,
+          designer,
         });
       })
       .catch(() => {

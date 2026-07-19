@@ -14,6 +14,14 @@ describe("resolveOptions", () => {
     expect(r.checks).toEqual(DEFAULT_CHECKS);
     expect(r.systemPrompt).toBe("");
     expect(r.panel).toEqual(DEFAULT_PANEL);
+    expect(r.designer).toBeNull();
+  });
+
+  it("resolves designer options when configured", () => {
+    const r = resolveOptions({ designer: { branch: "develop-design", baseBranch: "develop" } });
+    expect(r.designer?.branch).toBe("develop-design");
+    expect(r.designer?.baseBranch).toBe("develop");
+    expect(r.designer?.stubTag).toBe("@design-stub");
   });
 
   it("merges partial panel options over panel defaults", () => {
@@ -61,10 +69,17 @@ describe("isProtectedBranch", () => {
 });
 
 describe("panelConfigPayload", () => {
-  it("exposes panel options and check labels only", () => {
+  it("exposes panel options and check labels, with designer absent by default", () => {
     const payload = panelConfigPayload(
       resolveOptions({ checks: [{ label: "lint", command: ["npm", "run", "lint"] }] }),
     );
-    expect(payload).toEqual({ panel: DEFAULT_PANEL, checkLabels: ["lint"] });
+    expect(payload).toEqual({ panel: DEFAULT_PANEL, checkLabels: ["lint"], designer: null });
+  });
+
+  it("exposes only the designer fields the browser needs (branch + stubTag)", () => {
+    const payload = panelConfigPayload(
+      resolveOptions({ designer: { branch: "develop-design", denyWrites: ["^secret/"] } }),
+    );
+    expect(payload.designer).toEqual({ branch: "develop-design", stubTag: "@design-stub" });
   });
 });

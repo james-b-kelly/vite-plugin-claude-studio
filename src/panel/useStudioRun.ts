@@ -106,7 +106,7 @@ export function useStudioRun() {
     }
   }, [sessionId]);
 
-  const run = useCallback(async (opts: { instruction: string; resumeSessionId?: string; route?: string; screen?: string; pin?: PinTarget }) => {
+  const run = useCallback(async (opts: { instruction: string; resumeSessionId?: string; route?: string; screen?: string; mode?: "developer" | "designer"; pin?: PinTarget }) => {
     setStatus("running");
     setError(null);
     setChangedFiles([]);
@@ -248,14 +248,14 @@ export function useStudioRun() {
   // Commit & push the current changes. Server re-runs Check (lint+build) and
   // refuses if it fails, so a red build never reaches the remote.
   const commit = useCallback(
-    async (message: string) => {
+    async (message: string, mode?: "developer" | "designer") => {
       setBusy("committing");
       setCommitResult(null);
       try {
         const r = await fetch("/__studio/commit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, mode }),
         });
         const d = await r.json().catch(() => ({}));
         const ok = r.ok && !!d.ok;
