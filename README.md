@@ -253,6 +253,19 @@ Requesting a designer-mode run when `designer` isn't configured is refused
 with a 400 — without the profile there is no gate, so the server fails
 closed rather than running ungated.
 
+**What Designer mode is — and is not.** The profile is a *write* boundary
+for a cooperative teammate, not a sandbox against a hostile agent. Reads
+are deliberately never gated (Claude has to study real patterns to produce
+matching front-end code), and web access plus the allow-listed MCP servers
+remain available — so a prompt-injected run could in principle read
+anything in the repo and send it somewhere it can reach. Two mitigations
+are built in: `WebFetch` to loopback addresses is denied (so a gated run
+can't re-enter the Studio's own localhost API and request an ungated one),
+and only the MCP servers you explicitly allow are ever loaded. If designer
+sessions will touch repos containing real secrets, keep `mcpAllow` minimal
+and treat `.env` hygiene as the primary defence — the gate's deny list
+blocks *writing* those files, not reading them.
+
 ## Production exclusion
 
 Because the Studio drives an agent with real file-write access, it must be

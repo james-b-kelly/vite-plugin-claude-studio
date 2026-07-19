@@ -40,10 +40,15 @@ describe("resolveDesigner", () => {
     });
     expect(d.baseBranch).toBe("develop");
     expect(d.allowWrites).toEqual(["^src/components/"]);
-    expect(d.denyWrites).toEqual(["^src/api/"]);
     expect(d.mcpAllow).toEqual(["linear"]);
     expect(d.preamble).toContain("@mock-me");
     expect(d.preamble).not.toContain("@design-stub");
+  });
+
+  it("merges custom denyWrites with the generic defaults instead of replacing them", () => {
+    const d = resolveDesigner({ branch: "design", denyWrites: ["^src/api/"] });
+    expect(d.denyWrites).toContain("^src/api/");
+    for (const generic of DEFAULT_DENY_WRITES) expect(d.denyWrites).toContain(generic);
   });
 
   it("uses a custom preamble verbatim when given", () => {
@@ -102,6 +107,23 @@ describe("evaluateGate", () => {
     expect(
       evaluateGate({ tool_name: "Write", tool_input: { file_path: "/repo/Src/Api/x.ts" }, cwd }, cfg),
     ).toMatch(/@design-stub/);
+  });
+
+  it("denies WebFetch to loopback hosts (the studio's own API) but allows the web", () => {
+    expect(
+      evaluateGate({ tool_name: "WebFetch", tool_input: { url: "http://localhost:3000/__studio/generate" }, cwd }, cfg),
+    ).toMatch(/local/i);
+    expect(
+      evaluateGate({ tool_name: "WebFetch", tool_input: { url: "https://127.0.0.1:3000/x" }, cwd }, cfg),
+    ).toMatch(/local/i);
+    expect(evaluateGate({ tool_name: "WebFetch", tool_input: { url: "http://[::1]:3000/" }, cwd }, cfg)).toMatch(
+      /local/i,
+    );
+    expect(
+      evaluateGate({ tool_name: "WebFetch", tool_input: { url: "https://developer.mozilla.org/x" }, cwd }, cfg),
+    ).toBeNull();
+    // Unparsable URL → fail closed.
+    expect(evaluateGate({ tool_name: "WebFetch", tool_input: { url: 42 }, cwd }, cfg)).toMatch(/safety/i);
   });
 
   it("denies writes outside the project and writes with no resolvable target", () => {
@@ -191,7 +213,7 @@ describe("designerCliArgs", () => {
       const hook = settings.hooks.PreToolUse[0];
       expect(hook.matcher).toBe(".*");
       const command: string = hook.hooks[0].command;
-      expect(command).toContain('"/pkg/dist/gate.js"');
+      expect(command).toContain("'/pkg/dist/gate.js'");
       // The gate's config rides along as a base64 argv so the hook is self-contained.
       const b64 = command.split(" ").pop()!;
       const decoded = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
@@ -204,6 +226,18 @@ describe("designerCliArgs", () => {
       expect(args).toContain("--strict-mcp-config");
       const dt = args.indexOf("--disallowedTools");
       expect(args[dt + 1]).toBe("Task");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("single-quote shell-escapes the gate path so $ and backticks stay inert", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "studio-cli-"));
+    try {
+      const designer = resolveDesigner({ branch: "design" });
+      const args = designerCliArgs({ root: dir, designer, gatePath: "/pkg/we`ird $PATH/o'clock/gate.js" });
+      const command: string = JSON.parse(args[args.indexOf("--settings") + 1]).hooks.PreToolUse[0].hooks[0].command;
+      expect(command).toContain(`node '/pkg/we\`ird $PATH/o'\\''clock/gate.js'`);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

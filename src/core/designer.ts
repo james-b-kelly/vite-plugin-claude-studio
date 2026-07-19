@@ -89,7 +89,9 @@ export function resolveDesigner(options: DesignerOptions): ResolvedDesignerOptio
     branch: options.branch.trim(),
     baseBranch: options.baseBranch?.trim() || "main",
     allowWrites: options.allowWrites && options.allowWrites.length > 0 ? options.allowWrites : [".*"],
-    denyWrites: options.denyWrites ?? DEFAULT_DENY_WRITES,
+    // Custom denyWrites EXTEND the generic defaults rather than replacing them,
+    // so a project list never has to remember to re-add lockfile/env protection.
+    denyWrites: [...new Set([...(options.denyWrites ?? []), ...DEFAULT_DENY_WRITES])],
     mcpAllow: options.mcpAllow ?? [],
     stubTag,
     preamble: options.preamble ?? defaultPreamble(stubTag),
@@ -159,8 +161,26 @@ export function evaluateGate(input: GateInput, cfg: GateConfig): string | null {
     return null;
   }
 
+  // WebFetch to loopback is denied: the studio's own /__studio/* API lives on
+  // localhost with no auth, so an in-run fetch could re-enter it and request an
+  // ungated developer-mode generation. The public web stays available.
+  if (tool === "WebFetch") {
+    const url = (ti as Record<string, unknown>).url;
+    let host: string;
+    try {
+      host = new URL(String(url)).hostname.toLowerCase();
+    } catch {
+      return "Designer mode: could not determine the fetch target — blocking for safety.";
+    }
+    const bare = host.replace(/^\[|\]$/g, "");
+    if (bare === "localhost" || bare === "::1" || bare === "0.0.0.0" || bare.startsWith("127.")) {
+      return "Designer mode: fetching local/loopback addresses is disabled. The public web is fine.";
+    }
+    return null;
+  }
+
   if (tool !== "Write" && tool !== "Edit" && tool !== "MultiEdit") {
-    return null; // reads / search / web / allowed tooling are fine
+    return null; // reads / search / allowed tooling are fine
   }
 
   const fp = (ti as Record<string, unknown>).file_path;
@@ -251,6 +271,9 @@ export function designerCliArgs(args: {
 }): string[] {
   const { root, designer, gatePath } = args;
   const cfgB64 = Buffer.from(JSON.stringify(gateConfig(designer)), "utf8").toString("base64");
+  // POSIX single-quote escaping: unlike double quotes, $ and backticks stay
+  // inert. cfgB64 needs no quoting (the base64 alphabet has no metacharacters).
+  const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const settings = {
     hooks: {
       PreToolUse: [
@@ -259,7 +282,7 @@ export function designerCliArgs(args: {
           // additions, MCP writers) can slip past unexamined — the gate itself
           // decides allow/deny by tool name and allows reads/search.
           matcher: ".*",
-          hooks: [{ type: "command", command: `node ${JSON.stringify(gatePath)} ${cfgB64}` }],
+          hooks: [{ type: "command", command: `node ${shellQuote(gatePath)} ${cfgB64}` }],
         },
       ],
     },

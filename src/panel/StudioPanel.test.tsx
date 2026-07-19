@@ -192,6 +192,58 @@ describe("StudioPanel designer mode", () => {
     await waitFor(() => expect(designerBtn.className).toContain("modeActive"));
   });
 
+  it("seeds the mode from localStorage before any network round-trip (HMR remount safety)", async () => {
+    // A remount mid-designer-session must not fall back to ungated developer
+    // mode while /__studio/config and /__studio/status are still in flight.
+    localStorage.setItem("studio:v1:mode", "designer");
+    const pending = new Promise<never>(() => {}); // status/diff never resolve
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/__studio/config")) {
+          return {
+            ok: true,
+            json: async () => ({ panel: {}, checkLabels: ["lint"], designer }),
+          } as unknown as Response;
+        }
+        return pending as never;
+      }),
+    );
+    render(<StudioPanel />);
+    const designerBtn = await screen.findByText("Designer");
+    expect(designerBtn.className).toContain("modeActive");
+  });
+
+  it("never sends designer mode when the profile is not configured, even with stale storage", async () => {
+    localStorage.setItem("studio:v1:mode", "designer");
+    // Config has NO designer block; generate gets a stream that ends immediately.
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      const body = url.includes("/__studio/status")
+        ? { branch: "develop", protectedBranch: false, dirty: false }
+        : url.includes("/__studio/diff")
+          ? { files: [], diff: "" }
+          : {};
+      return {
+        ok: true,
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+        body: { getReader: () => ({ read: async () => ({ done: true, value: undefined }) }) },
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<StudioPanel />);
+    await screen.findByText(/branch/);
+    fireEvent.change(screen.getByPlaceholderText(/Describe a change/), { target: { value: "tweak" } });
+    fireEvent.click(screen.getByText("Send"));
+    await waitFor(() => {
+      const genCall = fetchMock.mock.calls.find(([u]) => String(u).includes("/__studio/generate"));
+      expect(genCall).toBeTruthy();
+      expect(JSON.parse(String(genCall![1]?.body)).mode).toBe("developer");
+    });
+  });
+
   it("sends the active mode with a generate request", async () => {
     const fetchMock = mockDesignerFetch({ statusBranch: "develop-design" });
     vi.stubGlobal("fetch", fetchMock);

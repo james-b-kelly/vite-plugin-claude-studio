@@ -54,6 +54,17 @@ function loadOpen(): boolean {
 
 type Mode = "developer" | "designer";
 
+// Seed the mode synchronously from storage: an HMR remount mid-designer-session
+// must not fall back to (ungated) developer mode while /__studio/config and
+// /__studio/status are still in flight.
+function loadMode(): Mode {
+  try {
+    return localStorage.getItem("studio:v1:mode") === "designer" ? "designer" : "developer";
+  } catch {
+    return "developer";
+  }
+}
+
 // Sticky banner copy for sync outcomes that need the designer's awareness.
 // "synced"/"ok" are silent. The designer is never asked to resolve git — just told.
 const SYNC_BANNERS: Record<string, string> = {
@@ -111,8 +122,11 @@ export function StudioPanel() {
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const [input, setInput] = useState("");
   const [info, setInfo] = useState<StatusInfo | null>(null);
-  const [mode, setMode] = useState<Mode>("developer");
+  const [mode, setMode] = useState<Mode>(loadMode);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  // Mode only takes effect when the profile is configured — with no designer
+  // config every request is developer, whatever stale storage says.
+  const effectiveMode: Mode = cfg.designer ? mode : "developer";
   const [showDiff, setShowDiff] = useState(false);
   // Visual select & annotate. `pin` is the serialisable target sent to Claude;
   // `pinnedEl` is the live node the outline tracks.
@@ -156,6 +170,14 @@ export function StudioPanel() {
       /* ignore */
     }
   }, [width]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("studio:v1:mode", mode);
+    } catch {
+      /* ignore */
+    }
+  }, [mode]);
 
   // Tear down any in-flight resize listeners if the panel unmounts mid-drag.
   useEffect(() => () => resizeCleanupRef.current?.(), []);
@@ -340,7 +362,7 @@ export function StudioPanel() {
     const route = window.location.pathname + window.location.search + window.location.hash;
     const screen = captureScreenContext();
     // Pin is sticky: it rides along on follow-up messages until cleared/replaced.
-    run({ instruction, route, screen, mode, resumeSessionId: sessionId, pin: pin ?? undefined });
+    run({ instruction, route, screen, mode: effectiveMode, resumeSessionId: sessionId, pin: pin ?? undefined });
     setInput("");
   };
 
@@ -493,7 +515,7 @@ export function StudioPanel() {
                     `Runs ${cfg.checkLabels.join(" + ")} first — won't commit if it fails.\n\nCommit message:`,
                   def,
                 );
-                if (msg && msg.trim()) commit(msg.trim(), mode);
+                if (msg && msg.trim()) commit(msg.trim(), effectiveMode);
               }}
             >
               {busy === "committing" ? "committing…" : "Commit & push"}

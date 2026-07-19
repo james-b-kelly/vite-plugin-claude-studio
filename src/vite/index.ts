@@ -372,13 +372,19 @@ async function handleCommit(
   if (message.length > 500) throw new HttpError(400, "Commit message too long.");
 
   // Designer mode is pinned to its branch: refuse to commit anywhere else, so
-  // design work can't land on a branch nobody is gating.
-  if (body.mode === "designer" && resolved.designer && branch !== resolved.designer.branch) {
-    throw new HttpError(
-      400,
-      `Designer-mode commits go to "${resolved.designer.branch}", but you're on "${branch}". ` +
-        "Reopen the panel in Designer mode to switch first.",
-    );
+  // design work can't land on a branch nobody is gating. Fail closed when the
+  // profile isn't configured at all (mirrors handleGenerate).
+  if (body.mode === "designer") {
+    if (!resolved.designer) {
+      throw new HttpError(400, "Designer mode is not configured for this project.");
+    }
+    if (branch !== resolved.designer.branch) {
+      throw new HttpError(
+        400,
+        `Designer-mode commits go to "${resolved.designer.branch}", but you're on "${branch}". ` +
+          "Reopen the panel in Designer mode to switch first.",
+      );
+    }
   }
 
   committing = true;

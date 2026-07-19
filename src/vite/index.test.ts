@@ -171,6 +171,21 @@ describe("designer-mode guards", () => {
     expect(JSON.parse(res.body).error).toMatch(/not configured/i);
   });
 
+  it("refuses a designer commit when designer mode is not configured (fail closed)", async () => {
+    const root = initRepo("work");
+    fs.writeFileSync(path.join(root, "a.txt"), "changed\n");
+    const { server } = makePlugin({}, root);
+    const { res } = await dispatch(
+      server,
+      withBody(
+        { url: "/__studio/commit", method: "POST", headers: { host: "localhost:5173" } },
+        { message: "tweak", mode: "designer" },
+      ),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toMatch(/not configured/i);
+  });
+
   it("refuses a designer commit off the design branch", async () => {
     const root = initRepo("work");
     fs.writeFileSync(path.join(root, "a.txt"), "changed\n");
