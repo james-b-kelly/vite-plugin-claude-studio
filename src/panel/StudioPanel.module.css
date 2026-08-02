@@ -105,7 +105,7 @@
   cursor: default;
 }
 .modeActive {
-  background: #3b6fe0;
+  background: var(--studio-accent, #3b6fe0);
   color: #fff;
 }
 .designerHint {

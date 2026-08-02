@@ -40,6 +40,11 @@ describe("parseGenerateBody", () => {
     );
     expect(ok.resumeSessionId).toBe("12345678-1234-1234-1234-123456789abc");
   });
+  it("defaults mode to developer and accepts designer", () => {
+    expect(parseGenerateBody(JSON.stringify({ instruction: "x" })).mode).toBe("developer");
+    expect(parseGenerateBody(JSON.stringify({ instruction: "x", mode: "designer" })).mode).toBe("designer");
+    expect(parseGenerateBody(JSON.stringify({ instruction: "x", mode: "nonsense" })).mode).toBe("developer");
+  });
   it("sanitises pins and drops unusable ones", () => {
     const req = parseGenerateBody(
       JSON.stringify({ instruction: "x", pin: { tag: "button", text: 'say "hi"\nnow' } }),
@@ -65,6 +70,15 @@ describe("buildPrompt", () => {
     const p = buildPrompt({ instruction: "do it", route: "/x" }, "use css modules");
     expect(p).toContain("use css modules");
     expect(p).toContain("Request: do it");
+  });
+  it("leads with the designer preamble when one is given", () => {
+    const bare = buildPrompt({ instruction: "do it" }, "", "DESIGNER RULES\n");
+    expect(bare.startsWith("DESIGNER RULES")).toBe(true);
+    expect(bare).toContain("do it");
+    const withCtx = buildPrompt({ instruction: "do it", route: "/x" }, "notes", "DESIGNER RULES\n");
+    expect(withCtx.startsWith("DESIGNER RULES")).toBe(true);
+    expect(withCtx).toContain("notes");
+    expect(withCtx).toContain("Request: do it");
   });
   it("leads with the pinned element when one is set", () => {
     const p = buildPrompt(

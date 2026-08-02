@@ -1,3 +1,5 @@
+import { resolveDesigner, type DesignerOptions, type ResolvedDesignerOptions } from "./designer";
+
 /** A named quality-gate command, e.g. { label: "lint", command: ["npm", "run", "lint"] }. */
 export type CheckSpec = { label: string; command: string[] };
 
@@ -26,6 +28,11 @@ export interface StudioOptions {
   /** Extra project context appended to every prompt (house rules, conventions). */
   systemPrompt?: string;
   panel?: PanelOptions;
+  /**
+   * Enables the gated Designer permission profile (branch pinning, write gate,
+   * MCP allow-list, stub-tag convention). Absent = developer-only Studio.
+   */
+  designer?: DesignerOptions;
 }
 
 export interface ResolvedStudioOptions {
@@ -33,6 +40,7 @@ export interface ResolvedStudioOptions {
   checks: CheckSpec[];
   systemPrompt: string;
   panel: Required<PanelOptions>;
+  designer: ResolvedDesignerOptions | null;
 }
 
 export const DEFAULT_CHECKS: CheckSpec[] = [
@@ -53,6 +61,7 @@ export function resolveOptions(options: StudioOptions = {}): ResolvedStudioOptio
     checks: options.checks && options.checks.length > 0 ? options.checks : DEFAULT_CHECKS,
     systemPrompt: options.systemPrompt?.trim() ?? "",
     panel: { ...DEFAULT_PANEL, ...(options.panel ?? {}) },
+    designer: options.designer ? resolveDesigner(options.designer) : null,
   };
 }
 
@@ -72,6 +81,13 @@ export function isProtectedBranch(branch: string | null, patterns: string[]): bo
 export function panelConfigPayload(resolved: ResolvedStudioOptions): {
   panel: Required<PanelOptions>;
   checkLabels: string[];
+  designer: { branch: string; stubTag: string } | null;
 } {
-  return { panel: resolved.panel, checkLabels: resolved.checks.map((c) => c.label) };
+  return {
+    panel: resolved.panel,
+    checkLabels: resolved.checks.map((c) => c.label),
+    designer: resolved.designer
+      ? { branch: resolved.designer.branch, stubTag: resolved.designer.stubTag }
+      : null,
+  };
 }

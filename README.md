@@ -99,6 +99,14 @@ box.
 | `panel.accent` | `string` (any CSS color) | `"#3b6fe0"` | Accent color for primary actions in the panel UI. |
 | `panel.position` | `"bottom-right" \| "top-right" \| "bottom-left" \| "top-left"` | `"bottom-right"` | Corner the floating launch button and panel dock to. |
 | `panel.appRootSelector` | `string` | `"#root"` | Selector for your app's root element. The panel docks by shrinking this element rather than overlaying it. |
+| `designer` | `DesignerOptions` | absent | Enables the gated **Designer** permission profile (see "Designer mode" below). Absent = the Studio is developer-only and no mode toggle is shown. |
+| `designer.branch` | `string` | — (required) | The dedicated branch designer work is pinned to, e.g. `"develop-design"`. |
+| `designer.baseBranch` | `string` | `"main"` | Branch the design branch is created from and kept merged with on every sync. |
+| `designer.allowWrites` | `string[]` (regex sources) | `[".*"]` | The front-end editable area, matched against repo-relative paths case-insensitively. The default allows everything not denied — scope it down to make Designer mode meaningfully safe. |
+| `designer.denyWrites` | `string[]` (regex sources) | env/config/lockfiles/`node_modules` | Hard-denied paths. Takes precedence over `allowWrites`. |
+| `designer.mcpAllow` | `string[]` | `[]` | MCP server names (from the repo's `.mcp.json`) a designer run may load and use. Everything else — and everything when `.mcp.json` is missing or invalid — is excluded (fail-closed). |
+| `designer.stubTag` | `string` | `"@design-stub"` | Comment tag the designer's Claude leaves on mocked data/logic so a developer can find and wire it up. |
+| `designer.preamble` | `string` | built-in designer preamble | Replaces the default Designer-mode prompt preamble entirely (the default teaches minimal-change, no-shell, mock-and-tag working style using `stubTag`). |
 
 A detached `HEAD`, or any failure to determine the current git branch, is
 always treated as protected regardless of `protectedBranches` — there's no
@@ -188,6 +196,75 @@ model: the safety net is the quality gate re-run at commit time, not a
 review-before-merge step. If your project needs a review step before code
 lands on a shared branch, do your Studio work on a feature branch and open
 your usual pull request from there.
+
+## Designer mode
+
+By default the Studio is developer-only: full tool access, ungated. Passing
+the `designer` option adds a second, restricted permission profile intended
+for a non-developer teammate (a designer) working in the same running app,
+and a Developer/Designer toggle appears in the panel header.
+
+```ts
+claudeStudio({
+  designer: {
+    branch: "develop-design",
+    baseBranch: "develop",
+    allowWrites: ["^src/components/", "^src/pages/", "\\.module\\.css$"],
+    denyWrites: ["^src/api/", "^src/hooks/"],
+    mcpAllow: ["linear"],
+  },
+})
+```
+
+What the Designer profile changes, all server-side:
+
+- **Branch pinning.** Choosing Designer syncs the working tree to
+  `designer.branch` via `POST /__studio/sync`: created from
+  `origin/<baseBranch>` the first time, then fast-forwarded to its own
+  upstream and merged with the base branch on every switch. A dirty tree
+  skips the sync (nothing is ever switched or merged over uncommitted
+  work); a conflicting base merge is aborted cleanly and reported in a
+  banner. Designer commits are refused off the design branch, so design
+  work can only land where a developer is gating it. Opening the panel
+  never moves the branch — only the explicit toggle does. Developer mode
+  never touches your branch at all.
+- **A write gate.** Designer runs get a Claude Code `PreToolUse` hook (the
+  package's `dist/gate.js`, wired via a per-run `--settings` override —
+  your repo's own settings are untouched). It hard-denies shell, notebook
+  edits, and any `Write`/`Edit` outside `allowWrites` (or inside
+  `denyWrites`, which wins). Reads and search are never gated — Claude
+  still studies real patterns anywhere in the repo. Paths are matched
+  case-insensitively so APFS casing tricks can't dodge a deny rule.
+- **MCP filtering.** Only servers named in `mcpAllow` are loaded, via a
+  filtered `--mcp-config` plus `--strict-mcp-config`. This matters because
+  an MCP server connects (and may run auth) at CLI startup, before any
+  hook can fire — filtering the config is the only way to keep your data
+  layer's MCP fully out of a designer session. The gate also denies calls
+  to any non-allow-listed MCP tool as a second layer.
+- **A working-style preamble.** Designer prompts are prefixed with a
+  preamble teaching the profile's conventions: smallest change that
+  satisfies the request, no shell, no subagent fan-out (`Task` is disabled
+  for the run), and — for data or behaviour that doesn't exist yet — local
+  state plus realistic mock data, each spot marked with a
+  `// @design-stub: <what's needed>` comment (`stubTag`) so a developer
+  can find and wire it up later.
+
+Requesting a designer-mode run when `designer` isn't configured is refused
+with a 400 — without the profile there is no gate, so the server fails
+closed rather than running ungated.
+
+**What Designer mode is — and is not.** The profile is a *write* boundary
+for a cooperative teammate, not a sandbox against a hostile agent. Reads
+are deliberately never gated (Claude has to study real patterns to produce
+matching front-end code), and web access plus the allow-listed MCP servers
+remain available — so a prompt-injected run could in principle read
+anything in the repo and send it somewhere it can reach. Two mitigations
+are built in: `WebFetch` to loopback addresses is denied (so a gated run
+can't re-enter the Studio's own localhost API and request an ungated one),
+and only the MCP servers you explicitly allow are ever loaded. If designer
+sessions will touch repos containing real secrets, keep `mcpAllow` minimal
+and treat `.env` hygiene as the primary defence — the gate's deny list
+blocks *writing* those files, not reading them.
 
 ## Production exclusion
 

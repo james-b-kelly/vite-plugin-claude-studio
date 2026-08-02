@@ -95,11 +95,15 @@ function claudeErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Failed to start Claude Code";
 }
 
+export type StudioMode = "developer" | "designer";
+
 export type GenerateRequest = {
   instruction: string;
   resumeSessionId?: string;
   route?: string;
   screen?: string;
+  /** Permission profile; absent means developer (ungated). */
+  mode?: StudioMode;
   pin?: PinInfo;
 };
 
@@ -124,12 +128,14 @@ export function parseGenerateBody(raw: string): GenerateRequest {
   const route = typeof obj.route === "string" ? obj.route.slice(0, 2000) : undefined;
   // A snapshot of the visible UI (open dialogs, headings) captured from the DOM.
   const screen = typeof obj.screen === "string" ? obj.screen.slice(0, 8000) : undefined;
+  // Permission profile. Designer is the gated front-end-only subset.
+  const mode: StudioMode = obj.mode === "designer" ? "designer" : "developer";
   const pin = parsePin(obj.pin);
-  return { instruction, resumeSessionId, route, screen, pin };
+  return { instruction, resumeSessionId, route, screen, mode, pin };
 }
 
-/** Prepend project notes + route/screen/pin context so Claude knows scope and target. */
-export function buildPrompt(request: GenerateRequest, systemPrompt: string): string {
+/** Prepend mode preamble + project notes + route/screen/pin context so Claude knows scope and target. */
+export function buildPrompt(request: GenerateRequest, systemPrompt: string, preamble = ""): string {
   const { instruction, route, screen, pin } = request;
   const ctx: string[] = [];
   if (pin) ctx.push(pinContext(pin));
@@ -138,8 +144,9 @@ export function buildPrompt(request: GenerateRequest, systemPrompt: string): str
   const notes = systemPrompt
     ? `Project notes from the app's Studio configuration:\n${systemPrompt}\n\n`
     : "";
-  if (ctx.length === 0) return notes ? `${notes}Request: ${instruction}` : instruction;
+  if (ctx.length === 0) return preamble + (notes ? `${notes}Request: ${instruction}` : instruction);
   return (
+    preamble +
     notes +
     `Context — what the user is looking at in the running app:\n${ctx.join("\n\n")}\n\n` +
     `Use this to find the relevant component(s): match the visible text/dialog titles above ` +
@@ -185,8 +192,10 @@ export function startGeneration(args: {
   request: GenerateRequest;
   systemPrompt: string;
   sink: GenerateSink;
+  /** Designer-mode extras (gate/MCP CLI args + prompt preamble); absent = developer. */
+  designer?: { cliArgs: string[]; preamble: string };
 }): void {
-  const { root, branch, request, systemPrompt, sink } = args;
+  const { root, branch, request, systemPrompt, sink, designer } = args;
 
   // Prompt via stdin (not argv) so nothing can be option-smuggled.
   const cliArgs = [
@@ -200,6 +209,7 @@ export function startGeneration(args: {
     GENERATE_MODEL,
   ];
   if (request.resumeSessionId) cliArgs.push("--resume", request.resumeSessionId);
+  if (designer) cliArgs.push(...designer.cliArgs);
 
   // env: subscriptionEnv() so an ambient ANTHROPIC_API_KEY can't redirect the CLI
   // to billed API usage — Studio always runs on the logged-in subscription.
@@ -268,6 +278,6 @@ export function startGeneration(args: {
   // regardless; the sink is a no-op once the response is closed. Explicit
   // cancellation goes through stopGeneration().
 
-  child.stdin?.write(buildPrompt(request, systemPrompt));
+  child.stdin?.write(buildPrompt(request, systemPrompt, designer?.preamble ?? ""));
   child.stdin?.end();
 }

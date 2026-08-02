@@ -39,6 +39,83 @@ export function isDirty(root: string): boolean {
   }
 }
 
+/** Best-effort `git fetch origin`; false = offline (must never block local editing). */
+export function fetchOrigin(root: string): boolean {
+  try {
+    execFileSync("git", ["fetch", "origin"], { cwd: root, maxBuffer: 8 * 1024 * 1024 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type SyncResult = "synced" | "offline" | "dirty-skip" | "conflict";
+
+/**
+ * Pin the working tree to the designer's dedicated branch and keep it current:
+ * created from `origin/<base>` the first time, otherwise checked out and
+ * fast-forwarded to its own upstream, then `origin/<base>` is merged in. A
+ * dirty tree skips everything (neither a branch switch nor a merge is safe over
+ * uncommitted work); a conflicting base merge is aborted — the branch is
+ * restored exactly and reported, so the designer keeps working on their
+ * known-good base and a developer reconciles later.
+ */
+export function syncDesignerBranch(
+  root: string,
+  opts: { branch: string; baseBranch: string; online: boolean },
+): { created: boolean; result: SyncResult } {
+  const { branch, baseBranch, online } = opts;
+  const git = (args: string[]) =>
+    execFileSync("git", args, { cwd: root, maxBuffer: 8 * 1024 * 1024 }).toString();
+
+  if (isDirty(root)) return { created: false, result: "dirty-skip" };
+
+  let created = false;
+  try {
+    if (currentBranch(root) !== branch) {
+      if (refExists(root, `refs/heads/${branch}`)) {
+        git(["checkout", branch]);
+      } else {
+        const base = refExists(root, `refs/remotes/origin/${baseBranch}`)
+          ? `origin/${baseBranch}`
+          : baseBranch;
+        git(["checkout", "-b", branch, base]);
+        created = true;
+      }
+    }
+    // Fast-forward to the branch's own upstream if it has one (no-op when just
+    // created). A diverged branch is left alone — the base merge below is where
+    // reconciliation happens.
+    if (online && !created && refExists(root, `refs/remotes/origin/${branch}`)) {
+      try {
+        git(["merge", "--ff-only", `origin/${branch}`]);
+      } catch {
+        /* diverged — handled by the base merge below */
+      }
+    }
+  } catch (e) {
+    throw new Error(`Could not switch to "${branch}": ${gitErr(e)}`);
+  }
+
+  // Bring the base branch in when we can. A clean or fast-forward merge keeps
+  // the designer current; the tree is clean here (dirty was handled above), so
+  // a merge failure is a real content conflict.
+  let result: SyncResult = online ? "synced" : "offline";
+  if (online && refExists(root, `refs/remotes/origin/${baseBranch}`)) {
+    try {
+      git(["merge", "--no-edit", `origin/${baseBranch}`]);
+    } catch {
+      try {
+        git(["merge", "--abort"]);
+      } catch {
+        /* nothing to abort */
+      }
+      result = "conflict";
+    }
+  }
+  return { created, result };
+}
+
 /** True if a git ref (e.g. `refs/heads/x`, `refs/remotes/origin/x`) resolves. */
 export function refExists(root: string, ref: string): boolean {
   try {
